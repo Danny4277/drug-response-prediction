@@ -3,6 +3,7 @@
 Reports metrics on the held-out TEST split for two split strategies:
   random     - the default PyTDC split (drugs and cell lines seen in training)
   cold_drug  - no drug in the test split appears in training
+  cold_cell  - no cell line in the test split appears in training
 
 Usage:
     python src/run_experiment.py --split random
@@ -235,7 +236,7 @@ def metrics(y_true, y_pred):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--split", choices=["random", "cold_drug"], default="random")
+    ap.add_argument("--split", choices=["random", "cold_drug", "cold_cell"], default="random")
     ap.add_argument("--model", choices=["vae", "raw"], default="vae")
     ap.add_argument("--epochs", type=int, default=30)
     ap.add_argument("--vae-epochs", type=int, default=30)
@@ -253,7 +254,8 @@ def main():
     if args.split == "random":
         splits = data.get_split(method="random", seed=SEED)
     else:
-        splits = data.get_split(method="cold_split", column_name="Drug_ID", seed=SEED)
+        col = "Drug_ID" if args.split == "cold_drug" else "Cell Line_ID"
+        splits = data.get_split(method="cold_split", column_name=col, seed=SEED)
     print("  rows:", {k: len(v) for k, v in splits.items()})
 
     drug_mat, drug_idx, cell_mat, cell_idx = build_tables(splits)
@@ -264,6 +266,9 @@ def main():
     if args.split == "cold_drug":
         overlap = set(tr[0].tolist()) & set(te[0].tolist())
         print(f"  drug overlap train/test: {len(overlap)} (expected 0)")
+    elif args.split == "cold_cell":
+        overlap = set(tr[1].tolist()) & set(te[1].tolist())
+        print(f"  cell-line overlap train/test: {len(overlap)} (expected 0)")
 
     # Standardize gene expression with TRAIN-split statistics only.
     cell_mat = torch.tensor(cell_mat)

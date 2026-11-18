@@ -15,6 +15,13 @@ All metrics below are on the **test split**, which was never used for model sele
 | Raw expression MLP | 17,737 features | **0.980** | **0.740** | **0.870** | **0.934** | **0.904** |
 | VAE latent + MLP | 128-d latent | 1.030 | 0.769 | 0.856 | 0.926 | 0.896 |
 
+### Cold-cell-line split — no test cell line is ever seen in training
+
+| Model | Cell-line input | RMSE ↓ | MAE ↓ | R² ↑ | Pearson ↑ | Spearman ↑ |
+|---|---|---|---|---|---|---|
+| Raw expression MLP | 17,737 features | 1.307 | 0.989 | 0.769 | 0.880 | 0.832 |
+| VAE latent + MLP | 128-d latent | **1.297** | **0.981** | **0.773** | **0.879** | **0.831** |
+
 ### Cold-drug split — no test drug is ever seen in training
 
 | Model | Cell-line input | RMSE ↓ | MAE ↓ | R² ↑ | Pearson ↑ | Spearman ↑ |
@@ -24,7 +31,19 @@ All metrics below are on the **test split**, which was never used for model sele
 
 ## What these numbers mean
 
-**The random split overstates the model by about 4×.** R² falls from 0.87 to 0.22 when the model is asked about drugs it has never seen. Most of the apparent skill on the random split comes from having seen the same compound against other cell lines during training, not from learning chemistry that transfers. Any claim that this model "predicts drug response" is really a claim about interpolating within known drugs — which is a useful task, but a different one from screening a new compound.
+**The two cold splits fail very differently, and that difference is the most informative result here.**
+
+| Asked to generalize to… | Test R² | |
+|---|---|---|
+| nothing new (random split) | 0.87 | |
+| an **unseen cell line** | 0.77 | holds up |
+| an **unseen drug** | 0.22 | collapses |
+
+A new tumor is largely fine: gene expression is a dense, continuous signal, and a cell line the model has never seen still lands near ones it has. A new compound is not. Most of the apparent skill on the random split comes from having seen that same drug against other cell lines, not from chemistry that transfers.
+
+This points at the drug representation rather than the expression encoder. A 2,048-bit Morgan fingerprint is a lookup of substructures that were present in training; for a scaffold unlike anything seen, it carries almost no usable signal. Swapping it for a learned molecular encoder (a GNN or a pretrained chemical language model) is where the next gain is, and compressing expression further is not.
+
+The practical reading: this model is useful for filling in a known drug against new tumors, and should not be trusted to screen a novel compound.
 
 **The VAE's advantage is cost, not accuracy.** Compressing expression 138× costs about 0.014 R² on the random split and buys a far cheaper model:
 
@@ -56,7 +75,7 @@ The raw frame repeats a cell line's full expression vector on every row, which i
 
 ```
 src/
-  run_experiment.py      # training + evaluation for both splits and both models
+  run_experiment.py      # training + evaluation for all three splits and both models
   benchmark_cost.py      # controlled per-epoch cost comparison
 notebooks/
   01_data_pipeline_and_baselines.ipynb   # original exploration: featurization + MLP baselines
@@ -75,6 +94,8 @@ pip install -r requirements.txt
 
 python src/run_experiment.py --split random --model vae
 python src/run_experiment.py --split random --model raw
+python src/run_experiment.py --split cold_cell --model vae
+python src/run_experiment.py --split cold_cell --model raw
 python src/run_experiment.py --split cold_drug --model vae
 python src/run_experiment.py --split cold_drug --model raw
 ```
@@ -83,7 +104,6 @@ PyTDC downloads GDSC2 on first run. The scripts use Apple MPS or CUDA when avail
 
 ## Limitations and next steps
 
-- **No cold-cell-line split yet.** Generalizing to an unseen tumor is a separate axis from generalizing to an unseen drug, and it is the one that matters for a new patient sample.
-- **Single seed.** Each number is one run; the spread across seeds has not been measured, so small gaps (such as 0.870 vs 0.856) should not be over-read.
-- **Fingerprints are a weak drug representation.** Morgan fingerprints cannot generalize to a scaffold unlike anything in training, which is a likely cause of the cold-drug collapse. A learned molecular encoder (GNN or a pretrained chemical language model) is the obvious next step.
+- **Single seed.** Each number is one run; the spread across seeds has not been measured, so small gaps (0.870 vs 0.856 on the random split, or the near-tie on the cold-cell split) should not be over-read. The cold-drug gap is far larger than any plausible seed noise.
+- **Fingerprints are the bottleneck.** The contrast between the cold-cell (0.77) and cold-drug (0.22) splits points at the molecular representation, not the expression encoder. Replacing Morgan fingerprints with a learned molecular encoder (a GNN or a pretrained chemical language model) is the clear next experiment.
 - **No hyperparameter search.** Architecture, learning rate, latent size and β were taken from the original notebooks rather than tuned.
