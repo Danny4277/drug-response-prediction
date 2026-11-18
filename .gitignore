@@ -6,3 +6,4 @@ __pycache__/
 data/
 *.pt
 *.pth
+results/*_log.txt

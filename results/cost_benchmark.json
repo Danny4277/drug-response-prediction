@@ -1,0 +1,25 @@
+{
+  "vae_pretrain_sec": 7.3,
+  "runs": [
+    {
+      "label": "raw-expression regressor",
+      "sec_per_epoch": 16.2,
+      "params_millions": 38.8,
+      "all_epochs": [
+        16.4,
+        16.3,
+        16.2
+      ]
+    },
+    {
+      "label": "VAE-latent regressor",
+      "sec_per_epoch": 2.3,
+      "params_millions": 0.6,
+      "all_epochs": [
+        2.3,
+        2.3,
+        2.3
+      ]
+    }
+  ]
+}
